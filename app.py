@@ -2,120 +2,168 @@ import streamlit as st
 import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
-import numpy as np
 
 st.set_page_config(page_title="Prediksi Konsumsi Listrik Jepang", layout="wide")
-st.title("Prediksi Konsumsi Listrik di Jepang")
-st.write("Masukkan variabel ekonomi untuk memprediksi konsumsi listrik sektor Residential & Industrial.")
 
-# --- Load dataset untuk ambil Region & mapping ---
-dataset = pd.read_csv("electricity_data.csv")
-region_list = dataset['Region'].unique().tolist()
-region_list.sort()
-region_mapping = {name: idx for idx, name in enumerate(region_list)}
+@st.cache_resource
+def load_models():
+    pipeline_res = joblib.load("pipeline_res.pkl")
+    pipeline_ind = joblib.load("pipeline_ind.pkl")
+    return pipeline_res, pipeline_ind
 
-# Load pipeline (Scaler + Model)
-pipeline_res = joblib.load("pipeline_res.pkl")
-pipeline_ind = joblib.load("pipeline_ind.pkl")
+pipeline_res, pipeline_ind = load_models()
 
-# --- Input user ---
-region = st.selectbox("Region", options=region_list)
-year = st.slider("Tahun", min_value=1990, max_value=2030, value=2025, step=1)
+region_map = {
+    'Chubu': 0, 'Chugoku': 1, 'Hokkaido': 2, 'Hokuriku': 3, 'Kansai': 4,
+    'Kyusyu': 5, 'Okinawa': 6, 'Shikoku': 7, 'Tohoku': 8, 'Tokyo': 9
+}
+region_names = list(region_map.keys())
 
-# Tabs untuk sektor
-tab1, tab2 = st.tabs(["🏠 Residential", "🏭 Industrial"])
-active_tab = None
+st.title("Prediksi Konsumsi Listrik Jepang")
+st.write("Masukkan variabel ekonomi untuk memprediksi konsumsi listrik sektor **Residential** dan **Industrial**.")
 
+tab1, tab2 = st.tabs(["Residential", "Industrial"])
+
+# ======================== RESIDENTIAL ==========================
 with tab1:
-    st.subheader("Input Variabel Residential")
-    intensity_res = st.number_input("Electricity Intensity (kWh)", min_value=0.0, step=0.1, format="%.2f", key="intensity_res")
-    nominal_price_res = st.number_input("Nominal Price (Yen/kWh)", min_value=0.0, step=0.01, format="%.2f", key="nominal_price_res")
-    real_price_res = st.number_input("Real Price (Yen/kWh)", min_value=0.0, step=0.01, format="%.2f", key="real_price_res")
-    if st.button("Prediksi Residential", key="btn_res"):
-        active_tab = "res"
+    st.subheader("Input Data - Sektor Residential")
 
-with tab2:
-    st.subheader("Input Variabel Industrial")
-    intensity_ind = st.number_input("Electricity Intensity (kWh)", min_value=0.0, step=0.1, format="%.2f", key="intensity_ind")
-    nominal_price_ind = st.number_input("Nominal Price (Yen/kWh)", min_value=0.0, step=0.01, format="%.2f", key="nominal_price_ind")
-    real_price_ind = st.number_input("Real Price (Yen/kWh)", min_value=0.0, step=0.01, format="%.2f", key="real_price_ind")
-    if st.button("Prediksi Industrial", key="btn_ind"):
-        active_tab = "ind"
+    col1, col2 = st.columns(2)
+    with col1:
+        region_res_name = st.selectbox("Region", options=region_names, key="region_res")
+        year_res = st.number_input("Year", min_value=1990, max_value=2050, value=2025, key="year_res")
+        intensity_res = st.number_input("Intensity", min_value=0.0, value=3000.0, key="intensity_res")
+    with col2:
+        nominal_price_res = st.number_input("Nominal Price", min_value=0.0, value=20.0, key="nominal_res")
+        real_price_res = st.number_input("Real Price", min_value=0.0, value=150.0, key="real_res")
 
-# Format angka ribuan
-def format_idr(num):
-    return '{:,.2f}'.format(num).replace(',', 'X').replace('.', ',').replace('X', '.')
+    region_res = region_map[region_res_name]
 
-# --- Fungsi elastisitas sederhana ---
-def estimate_elasticity(model, base_input, price_col, delta=0.05):
-    higher_price = base_input.copy()
-    higher_price[price_col] *= (1 + delta)
-    base_pred = model.predict(base_input)[0]
-    new_pred = model.predict(higher_price)[0]
-    elasticity = ((new_pred - base_pred) / base_pred) / (delta)
-    return elasticity
+    input_res_df = pd.DataFrame([{
+        "Region": region_res,
+        "Year": year_res,
+        "Intensity": intensity_res,
+        "NominalPrice": nominal_price_res,
+        "RealPrice": real_price_res
+    }])
 
-# --- Jalankan prediksi sesuai tab aktif ---
-if active_tab in ["res", "ind"]:
-    region_code = region_mapping[region]
-    if active_tab == "res":
-        input_data = pd.DataFrame([[region_code, year, intensity_res, nominal_price_res, real_price_res]],
-                                  columns=["Region", "Year", "Intensity", "NominalPrice", "RealPrice"])
-        model = pipeline_res
-        label = "Residential"
-    else:
-        input_data = pd.DataFrame([[region_code, year, intensity_ind, nominal_price_ind, real_price_ind]],
-                                  columns=["Region", "Year", "Intensity", "NominalPrice", "RealPrice"])
-        model = pipeline_ind
-        label = "Industrial"
+    if st.button("Prediksi Residential"):
+        res_pred = pipeline_res.predict(input_res_df)[0]
+        st.success(f"Prediksi Konsumsi Listrik Residential: {res_pred:,.2f} Kwh")
 
-    pred_value = model.predict(input_data)[0]
+        # --- Summary Table ---
+        st.write("#### Summary Input & Prediksi")
+        summary_res = input_res_df.copy()
+        summary_res["Prediksi_Konsumsi_KWh"] = round(res_pred, 2)
+        summary_res["Region"] = region_res_name
+        st.dataframe(summary_res)
 
-    st.subheader(f"Hasil Prediksi - {label}")
-    st.write(f"**Prediksi Konsumsi:** {format_idr(pred_value)} kWh")
+        # --- Simulasi Konsumsi 10 Tahun ke Depan ---
+        st.write("#### Simulasi Konsumsi 10 Tahun ke Depan (Residential)")
+        future_years = list(range(year_res, year_res + 10))
+        simulasi_df = pd.DataFrame({
+            "Region": region_res,
+            "Year": future_years,
+            "Intensity": intensity_res,
+            "NominalPrice": nominal_price_res,
+            "RealPrice": real_price_res
+        })
+        simulasi_pred = pipeline_res.predict(simulasi_df)
 
-    # --- Accordion untuk tujuan penelitian ---
-    with st.expander("🎯 Tujuan 1: Elastisitas & Tren Konsumsi"):
-        years = list(range(1990, 2031))
-        pred_list = []
-        for y in years:
-            temp = input_data.copy()
-            temp["Year"] = y
-            pred_list.append(model.predict(temp)[0])
-        fig, ax = plt.subplots()
-        ax.plot(years, pred_list, label=label, color="blue" if active_tab == "res" else "orange")
-        ax.set_title(f"Tren Prediksi Konsumsi Listrik ({label}) - {region}")
-        ax.set_xlabel("Tahun")
-        ax.set_ylabel("Konsumsi (kWh)")
-        ax.legend()
-        st.pyplot(fig)
+        fig1, ax1 = plt.subplots(figsize=(10, 3))
+        ax1.plot(future_years, simulasi_pred, marker='o')
+        ax1.set_xlabel("Tahun")
+        ax1.set_ylabel("Konsumsi (KWh)")
+        ax1.set_title("Prediksi 10 Tahun Mendatang")
+        st.pyplot(fig1)
 
-        elasticity = estimate_elasticity(model, input_data, "NominalPrice")
-        st.write(f"**Estimasi Elastisitas Harga:** {elasticity:.3f} (interpretasi: {'inelastis' if abs(elasticity)<1 else 'elastis'})")
+        # --- Simulasi Harga Riil ---
+        st.write("####  Sensitivitas Harga Riil (Residential)")
+        harga_range = list(range(int(real_price_res) - 50, int(real_price_res) + 60, 10))
+        harga_df = pd.DataFrame({
+            "Region": region_res,
+            "Year": year_res,
+            "Intensity": intensity_res,
+            "NominalPrice": nominal_price_res,
+            "RealPrice": harga_range
+        })
+        harga_preds = pipeline_res.predict(harga_df)
 
-    with st.expander("🎯 Tujuan 2: Perbandingan Antar Region"):
-        compare_preds = []
-        for r_name, r_code in region_mapping.items():
-            temp = input_data.copy()
-            temp["Region"] = r_code
-            compare_preds.append((r_name, model.predict(temp)[0]))
-        compare_df = pd.DataFrame(compare_preds, columns=["Region", "Prediksi"])
-        compare_df = compare_df.sort_values("Prediksi", ascending=False)
-        fig2, ax2 = plt.subplots()
-        ax2.bar(compare_df["Region"], compare_df["Prediksi"], color="green")
-        ax2.set_title(f"Perbandingan Konsumsi Listrik per Region ({label})")
-        ax2.set_ylabel("Prediksi Konsumsi (kWh)")
-        plt.xticks(rotation=45)
+        fig2, ax2 = plt.subplots(figsize=(10, 3))
+        ax2.plot(harga_range, harga_preds, marker='s', color='green')
+        ax2.set_xlabel("Real Price")
+        ax2.set_ylabel("Konsumsi (KWh)")
+        ax2.set_title("Sensitivitas terhadap Harga")
         st.pyplot(fig2)
 
-    with st.expander("🎯 Tujuan 3: Insight & Rekomendasi"):
-        if pred_value > np.median(compare_df["Prediksi"]):
-            insight = f"Konsumsi {label.lower()} di {region} relatif tinggi dibandingkan region lain. Perlu strategi pengendalian konsumsi dan efisiensi energi."
-        else:
-            insight = f"Konsumsi {label.lower()} di {region} relatif rendah. Masih ada ruang untuk optimalisasi pemanfaatan listrik."
-        st.write("**Insight:**")
-        st.write(insight)
-        st.write("**Rekomendasi:**")
-        st.write("- Evaluasi kebijakan harga listrik untuk menjaga keseimbangan konsumsi.")
-        st.write("- Implementasi program efisiensi energi berbasis sektor.")
-        st.write("- Prioritaskan wilayah dengan konsumsi tinggi untuk intervensi kebijakan.")
+# ======================== INDUSTRIAL ==========================
+with tab2:
+    st.subheader("Input Data - Sektor Industrial")
+
+    col3, col4 = st.columns(2)
+    with col3:
+        region_ind_name = st.selectbox("Region", options=region_names, key="region_ind")
+        year_ind = st.number_input("Year", min_value=1990, max_value=2050, value=2025, key="year_ind")
+        intensity_ind = st.number_input("Intensity", min_value=0.0, value=50000.0, key="intensity_ind")
+    with col4:
+        nominal_price_ind = st.number_input("Nominal Price", min_value=0.0, value=30.0, key="nominal_ind")
+        real_price_ind = st.number_input("Real Price", min_value=0.0, value=140.0, key="real_ind")
+
+    region_ind = region_map[region_ind_name]
+
+    input_ind_df = pd.DataFrame([{
+        "Region": region_ind,
+        "Year": year_ind,
+        "Intensity": intensity_ind,
+        "NominalPrice": nominal_price_ind,
+        "RealPrice": real_price_ind
+    }])
+
+    if st.button("Prediksi Industrial"):
+        ind_pred = pipeline_ind.predict(input_ind_df)[0]
+        st.success(f"Prediksi Konsumsi Listrik Industrial: {ind_pred:,.2f} Kwh")
+
+        # --- Summary Table ---
+        st.write("#### Summary Input & Prediksi")
+        summary_ind = input_ind_df.copy()
+        summary_ind["Prediksi_Konsumsi_KWh"] = round(ind_pred, 2)
+        summary_ind["Region"] = region_ind_name
+        st.dataframe(summary_ind)
+
+        # --- Simulasi Konsumsi 10 Tahun ke Depan ---
+        st.write("#### Simulasi Konsumsi 10 Tahun ke Depan (Industrial)")
+        future_years_ind = list(range(year_ind, year_ind + 10))
+        simulasi_ind_df = pd.DataFrame({
+            "Region": region_ind,
+            "Year": future_years_ind,
+            "Intensity": intensity_ind,
+            "NominalPrice": nominal_price_ind,
+            "RealPrice": real_price_ind
+        })
+        simulasi_ind_pred = pipeline_ind.predict(simulasi_ind_df)
+
+        fig3, ax3 = plt.subplots(figsize=(10, 3))
+        ax3.plot(future_years_ind, simulasi_ind_pred, marker='o')
+        ax3.set_xlabel("Tahun")
+        ax3.set_ylabel("Konsumsi (KWh)")
+        ax3.set_title("Prediksi 10 Tahun Mendatang")
+        st.pyplot(fig3)
+
+        # --- Simulasi Harga Riil ---
+        st.write("####  Sensitivitas Harga Riil (Industrial)")
+        harga_range_ind = list(range(int(real_price_ind) - 50, int(real_price_ind) + 60, 10))
+        harga_ind_df = pd.DataFrame({
+            "Region": region_ind,
+            "Year": year_ind,
+            "Intensity": intensity_ind,
+            "NominalPrice": nominal_price_ind,
+            "RealPrice": harga_range_ind
+        })
+        harga_preds_ind = pipeline_ind.predict(harga_ind_df)
+
+        fig4, ax4 = plt.subplots(figsize=(10, 3))
+        ax4.plot(harga_range_ind, harga_preds_ind, marker='s', color='orange')
+        ax4.set_xlabel("Real Price")
+        ax4.set_ylabel("Konsumsi (KWh)")
+        ax4.set_title("Sensitivitas terhadap Harga")
+        st.pyplot(fig4)
