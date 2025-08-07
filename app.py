@@ -7,8 +7,8 @@ st.set_page_config(page_title="Prediksi Konsumsi Listrik Jepang", layout="wide")
 
 @st.cache_resource
 def load_models():
-    pipeline_res = joblib.load("pipeline_res.pkl")
-    pipeline_ind = joblib.load("pipeline_ind.pkl")
+    pipeline_res = joblib.load("models\pipeline_res.pkl")
+    pipeline_ind = joblib.load("models\pipeline_ind.pkl")
     return pipeline_res, pipeline_ind
 
 pipeline_res, pipeline_ind = load_models()
