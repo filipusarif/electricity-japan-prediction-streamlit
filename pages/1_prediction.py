@@ -7,8 +7,8 @@ st.set_page_config(page_title="Prediksi Konsumsi Listrik Jepang", layout="wide")
 
 @st.cache_resource
 def load_models():
-    pipeline_res = joblib.load("./models/pipeline_res.pkl")
-    pipeline_ind = joblib.load("./models/pipeline_ind.pkl")
+    pipeline_res = joblib.load("models/pipeline_res.pkl")
+    pipeline_ind = joblib.load("models/pipeline_ind.pkl")
     return pipeline_res, pipeline_ind
 
 pipeline_res, pipeline_ind = load_models()
@@ -76,6 +76,26 @@ with tab1:
         ax1.set_ylabel("Konsumsi (KWh)")
         ax1.set_title("Prediksi 10 Tahun Mendatang")
         st.pyplot(fig1)
+        
+        # Buat kesimpulan tren otomatis
+        start_year, end_year = future_years[0], future_years[-1]
+        start_val, end_val = simulasi_pred[0], simulasi_pred[-1]
+
+        if end_val > start_val:
+            trend = "peningkatan"
+        elif end_val < start_val:
+            trend = "penurunan"
+        else:
+            trend = "stabil"
+
+        kesimpulan = (
+            f"Prediksi konsumsi listrik sektor Residential untuk {len(future_years)} tahun mendatang "
+            f"menunjukkan {trend} dari sekitar {start_val/1e9:.1f} miliar kWh pada {start_year} "
+            f"menjadi {end_val/1e9:.1f} miliar kWh pada {end_year}. "
+        )
+
+        st.write("##### Penjelasan Hasil Konsumsi Listrik")
+        st.write(kesimpulan)
 
         # --- Simulasi Harga Riil ---
         st.write("####  Sensitivitas Harga Riil (Residential)")
@@ -95,6 +115,47 @@ with tab1:
         ax2.set_ylabel("Konsumsi (KWh)")
         ax2.set_title("Sensitivitas terhadap Harga")
         st.pyplot(fig2)
+        
+        # --- Kesimpulan otomatis sensitivitas harga ---
+        start_price, end_price = harga_range[0], harga_range[-1]
+        start_cons, end_cons = harga_preds[0], harga_preds[-1]
+
+        if end_cons > start_cons:
+            arah = "berbanding lurus"
+        elif end_cons < start_cons:
+            arah = "berbanding terbalik"
+        else:
+            arah = "tidak menunjukkan perubahan signifikan"
+
+        persen_perubahan = ((end_cons - start_cons) / start_cons) * 100
+
+        kesimpulan_harga = (
+            f"Konsumsi listrik sektor Residential cenderung {arah} terhadap harga riil. "
+            f"Ketika harga naik dari {start_price} menjadi {end_price}, konsumsi berubah dari "
+            f"{start_cons/1e9:.2f} miliar kWh menjadi {end_cons/1e9:.2f} miliar kWh "
+            f"({persen_perubahan:.2f}% perubahan)."
+        )
+
+        st.write("##### Penjelasan Hasil Sensitivitas Harga")
+        st.write(kesimpulan_harga)
+
+        # === Kesimpulan Gabungan untuk Kebijakan ===
+        final_kesimpulan = (
+            f"Analisis menunjukkan bahwa konsumsi listrik sektor Residential {arah} terhadap harga riil. "
+            f"Kenaikan harga dari {start_price} menjadi {end_price} berpotensi mengubah konsumsi "
+            f"dari {start_cons/1e9:.2f} miliar kWh menjadi {end_cons/1e9:.2f} miliar kWh "
+            f"({persen_perubahan:+.2f}%). "
+            f"Selain itu, prediksi jangka {len(future_years)} tahun ke depan memperlihatkan {trend} konsumsi "
+            f"dari {start_val/1e9:.1f} miliar kWh pada {start_year} menjadi {end_val/1e9:.1f} miliar kWh pada {end_year}. "
+            f"Temuan ini memberikan dasar penting bagi pembuat kebijakan untuk menyesuaikan strategi harga listrik "
+            f"dan merancang program efisiensi energi yang mampu mengendalikan permintaan "
+            f"serta menjaga keberlanjutan pasokan."
+        )
+
+        st.write("### Kesimpulan untuk Kebijakan")
+        st.write(final_kesimpulan)
+
+        
 
 # ======================== INDUSTRIAL ==========================
 with tab2:
@@ -148,6 +209,26 @@ with tab2:
         ax3.set_ylabel("Konsumsi (KWh)")
         ax3.set_title("Prediksi 10 Tahun Mendatang")
         st.pyplot(fig3)
+        
+        # Buat kesimpulan tren otomatis
+        start_year, end_year = future_years_ind[0], future_years_ind[-1]
+        start_val, end_val = simulasi_ind_pred[0], simulasi_ind_pred[-1]
+
+        if end_val > start_val:
+            trend = "peningkatan"
+        elif end_val < start_val:
+            trend = "penurunan"
+        else:
+            trend = "stabil"
+
+        kesimpulan = (
+            f"Prediksi konsumsi listrik sektor Industrial untuk {len(future_years_ind)} tahun mendatang "
+            f"menunjukkan {trend} dari sekitar {start_val/1e9:.1f} miliar kWh pada {start_year} "
+            f"menjadi {end_val/1e9:.1f} miliar kWh pada {end_year}. "
+        )
+
+        st.write("##### Penjelasan Hasil Konsumsi Listrik")
+        st.write(kesimpulan)
 
         # --- Simulasi Harga Riil ---
         st.write("####  Sensitivitas Harga Riil (Industrial)")
@@ -167,3 +248,42 @@ with tab2:
         ax4.set_ylabel("Konsumsi (KWh)")
         ax4.set_title("Sensitivitas terhadap Harga")
         st.pyplot(fig4)
+        
+        # --- Kesimpulan otomatis sensitivitas harga ---
+        start_price, end_price = harga_range_ind[0], harga_range_ind[-1]
+        start_cons, end_cons = harga_preds_ind[0], harga_preds_ind[-1]
+
+        if end_cons > start_cons:
+            arah = "berbanding lurus"
+        elif end_cons < start_cons:
+            arah = "berbanding terbalik"
+        else:
+            arah = "tidak menunjukkan perubahan signifikan"
+
+        persen_perubahan = ((end_cons - start_cons) / start_cons) * 100
+
+        kesimpulan_harga = (
+            f"Konsumsi listrik sektor Residential cenderung {arah} terhadap harga riil. "
+            f"Ketika harga naik dari {start_price} menjadi {end_price}, konsumsi berubah dari "
+            f"{start_cons/1e9:.2f} miliar kWh menjadi {end_cons/1e9:.2f} miliar kWh "
+            f"({persen_perubahan:.2f}% perubahan)."
+        )
+
+        st.write("##### Penjelasan Hasil Sensitivitas Harga")
+        st.write(kesimpulan_harga)
+        
+        # === Kesimpulan Gabungan untuk Kebijakan ===
+        final_kesimpulan_ind = (
+            f"Analisis menunjukkan bahwa konsumsi listrik sektor Industrial {arah} terhadap harga riil. "
+            f"Kenaikan harga dari {start_price} menjadi {end_price} berpotensi mengubah konsumsi "
+            f"dari {start_cons/1e9:.2f} miliar kWh menjadi {end_cons/1e9:.2f} miliar kWh "
+            f"({persen_perubahan:+.2f}%). "
+            f"Selain itu, prediksi jangka {len(future_years_ind)} tahun ke depan memperlihatkan {trend} konsumsi "
+            f"dari {start_val/1e9:.1f} miliar kWh pada {start_year} menjadi {end_val/1e9:.1f} miliar kWh pada {end_year}. "
+            f"Temuan ini memberikan dasar penting bagi pembuat kebijakan untuk menyesuaikan strategi harga listrik "
+            f"dan merancang program efisiensi energi yang mampu mengendalikan permintaan "
+            f"serta menjaga keberlanjutan pasokan."
+        )
+
+        st.write("### Kesimpulan untuk Kebijakan")
+        st.write(final_kesimpulan_ind)
